@@ -1,0 +1,159 @@
+version: '3'
+services:
+  action-processor:
+    build:
+      context: .
+      args:
+        - NPM_TOKEN
+    command: npm run develop
+    volumes:
+      - ./app:/src/app
+    ports:
+      - '8091:80'
+      - '9229:9229'
+    environment:
+      NODE_ENV: development
+      NODE_IP: localhost
+      NODE_MAX_OLD_SPACE_SIZE: 115
+      NODE_GC_INTERVAL: 100
+      DD_API_KEY: fake-api-key
+      DD_APP_NAME: action-processor
+      DD_SERVICE: action-processor
+      DD_SOURCE: bluerobot-monitoring
+      DD_TAGS: app:action-processor,env:development,version:v0.1.test
+      DD_APP_VERSION: v0.1.test
+      DD_TRACE_ENABLED: 'false'
+      AMQP_URL: amqp://guest:guest@amqp/
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_USER: bluerobot
+      MYSQL_PASSWORD: password
+      MYSQL_DATABASE: bluerobot
+      KRAKEN_URL: http://kraken
+      SUBSCRIPTIONS_URL: http://subscription
+      MEDIA_URL: http://media
+      DASHBOT_API_VERSION: 10.1.1-rest
+      PORT: 80
+      CRYPT_KEEPER_AES_SECRET: a secret that's exactly 32 chars
+      TWITTER_CONSUMER_KEY: ${TWITTER_CONSUMER_KEY}
+      TWITTER_CONSUMER_SECRET: ${TWITTER_CONSUMER_SECRET}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY}
+      SENDGRID_EMAIL_FROM: ${SENDGRID_EMAIL_FROM}
+      D360_API_URL: 'https://waba-sandbox.messagepipe.io/v1/messages'
+      PHOTO_MOSAIC_VERSION: '1'
+      FACEBOOK_API_URL: 'https://graph.facebook.com/v19.0'
+      FACEBOOK_API_VERSION: 'v19.0'
+      COUPON_SERVICE_URL: 'http://coupon'
+      META_API_TIMEOUT: '1234'
+    links:
+      - amqp
+      - mysql
+      - flyway-db-migration
+      - media
+  amqp:
+    image: rabbitmq:management
+    hostname: amqp
+    ports:
+      - '15672:15672'
+      - '5672:5672'
+      - '5671:5671'
+    volumes:
+      - ./rabbitmq-conf/enabled_plugins:/etc/rabbitmq/enabled_plugins
+  flyway-db-migration:
+    image: therealbluerobot/docker-flywaydb-migrate:latest
+    environment:
+      GIT_PROJECT: addynamo/bluerobot-database
+      GIT_SSH_KEY: $GIT_SSH_KEY
+      GIT_SCHEMA_FOLDER: migration
+      MYSQL_HOST: mysql
+      MYSQL_USER: root
+      MYSQL_PASSWORD: password
+      MYSQL_DATABASE: bluerobot
+    volumes:
+      - ./mysql:/var/lib/mysql
+    depends_on:
+      - mysql
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: password
+      MYSQL_USER: bluerobot
+      MYSQL_PASSWORD: password
+      MYSQL_DATABASE: bluerobot
+    ports:
+      - '3306:3306'
+    volumes:
+      - ./mysql:/var/lib/mysql
+  media:
+    image: gcr.io/arctic-eye-468/media
+    environment:
+      NODE_ENV: development
+      MYSQL_HOST: mysql
+      MYSQL_USER: bluerobot
+      MYSQL_PASSWORD: password
+      MYSQL_DATABASE: bluerobot
+      AUTH_URL: http://auth
+      DD_API_KEY: fake-api-key
+      DD_APP_NAME: media
+      DD_APP_VERSION: v0.1.test
+      NODE_MAX_OLD_SPACE_SIZE: 115
+      NODE_GC_INTERVAL: 100
+      DD_SERVICE: action-processor
+      DD_SOURCE: bluerobot-monitoring
+      DD_TAGS: app:action-processor,env:development,version:v0.1.test
+      DD_TRACE_ENABLED: 'false'
+      NODE_IP: 127.0.0.1
+      PORT: 80
+      TWITTER_CONSUMER_KEY: ${TWITTER_CONSUMER_KEY}
+      TWITTER_CONSUMER_SECRET: ${TWITTER_CONSUMER_SECRET}
+    ports:
+      - '8082:80'
+    links:
+      - mysql
+  auth:
+    image: gcr.io/arctic-eye-468/auth
+    environment:
+      NODE_ENV: development
+      MYSQL_HOST: mysql
+      MYSQL_USER: bluerobot
+      MYSQL_PASSWORD: password
+      MYSQL_DATABASE: bluerobot
+      JWT_SECRET: secret
+      DD_API_KEY: fake-api-key
+      DD_APP_NAME: auth
+      DD_APP_VERSION: v0.1.test
+      NODE_MAX_OLD_SPACE_SIZE: 115
+      NODE_GC_INTERVAL: 100
+      DD_SERVICE: action-processor
+      DD_SOURCE: bluerobot-monitoring
+      DD_TAGS: app:action-processor,env:development,version:v0.1.test
+      DD_TRACE_ENABLED: 'false'
+      NODE_IP: 127.0.0.1
+      PORT: 80
+      BLUEROBOT_CONSUMER_KEY: ${TWITTER_CONSUMER_KEY}
+      BLUEROBOT_CONSUMER_SECRET: ${TWITTER_CONSUMER_SECRET}
+    ports:
+      - '8081:80'
+  media-manipulation:
+    image: gcr.io/arctic-eye-468/media-manipulation:latest
+    platform: linux/x86_64
+    command: node .
+    environment:
+      NODE_ENV: development
+      NODE_IP: localhost
+      PORT: 80
+      NODE_MAX_OLD_SPACE_SIZE: 115
+      NODE_GC_INTERVAL: 100
+      DD_API_KEY: fake-api-key
+      DD_APP_NAME: media-manipulation
+      DD_SERVICE: media-manipulation
+      DD_SOURCE: bluerobot-monitoring
+      DD_TAGS: app:media-manipulation,env:development,version:v0.1.test
+      DD_APP_VERSION: v0.1.test
+      DD_TRACE_ENABLED: 'false'
+      MYSQL_HOST: mysql
+      MYSQL_USER: bluerobot
+      MYSQL_PASSWORD: password
+      MYSQL_DATABASE: bluerobot
+    ports:
+      - '8092:8080'

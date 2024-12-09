@@ -1,0 +1,29 @@
+version: '3'
+services:
+  action-processor:
+    environment:
+      TWITTER_CONSUMER_KEY: 'twitter-consumer-key'
+      TWITTER_CONSUMER_SECRET: 'twitter-consumer-secret'
+      SENDGRID_API_KEY: 'sendgrid-api-key'
+      SENDGRID_EMAIL_FROM: 'sendgrid-email-from'
+      KRAKEN_URL: 'http://kraken'
+      SUBSCRIPTIONS_URL: 'http://subscription'
+  media:
+    environment:
+      GCS_CREDENTIALS: '{}'
+      GCS_BUCKET: gcs-bucket
+      GCS_PROJECT: 'gcs-project'
+      TWITTER_CONSUMER_KEY: 'twitter-consumer-key'
+      TWITTER_CONSUMER_SECRET: 'twitter-consumer-secret'
+  auth:
+    environment:
+      BLUEROBOT_CONSUMER_KEY: 'bluerobot-consumer-key'
+      BLUEROBOT_CONSUMER_SECRET: 'bluerobot-consumer-secret'
+  # flyway-db-migration:
+  #   environment:
+  #     ## Specify the branch in https://github.com/addynamo/bluerobot-database to fetch DB changes from
+  #     GIT_BRANCH: any/branch/in/repo
+  #     ## Can specify either GIT_SSH_KEY or GIT_USERNAME & GIT_TOKEN
+  #     # GIT_SSH_KEY: env-var-containing-your-git-ssh-key
+  #     # GIT_USERNAME: your-git-username (works with github username)
+  #     # GIT_TOKEN: your-git-token-or-password (works with github personal access token)

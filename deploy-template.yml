@@ -1,0 +1,184 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${CODENAME}
+  labels:
+    project: ${PROJECT}
+    name: ${SERVICE}
+    env: ${ENVIRONMENT}
+spec:
+  type: NodePort
+  selector:
+    project: ${PROJECT}
+    name: ${SERVICE}
+    env: ${ENVIRONMENT}
+  ports:
+    - name: "http"
+      port: 80
+      targetPort: 8080
+---
+apiVersion: autoscaling/v1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ${CODENAME}
+  namespace: default
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ${CODENAME}
+  minReplicas: ${AUTOSCALE_MIN_REPLICAS}
+  maxReplicas: ${AUTOSCALE_MAX_REPLICAS}
+  targetCPUUtilizationPercentage: 80
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${CODENAME}
+spec:
+  replicas: ${REPLICAS}
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      project: ${PROJECT}
+      name: ${SERVICE}
+      env: ${ENVIRONMENT}
+  template:
+    metadata:
+      annotations:
+        "cluster-autoscaler.kubernetes.io/safe-to-evict": "true"
+      labels:
+        project: ${PROJECT}
+        name: ${SERVICE}
+        env: ${ENVIRONMENT}
+    spec:
+      containers:
+        - name: ${SERVICE}
+          image: ${REGISTRY}/${PROJECT_ID}/${SERVICE}:${IMAGE_TAG}
+          imagePullPolicy: Always
+          ports:
+            - name: "http"
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /
+              port: "http"
+              httpHeaders:
+                - name: X-Custom-Header
+                  value: "k8s health check"
+            initialDelaySeconds: 15
+          env:
+            - name: PROJECT_ID
+              value: ${PROJECT_ID}
+            - name: CODENAME
+              value: ${CODENAME}
+            - name: NODE_ENV
+              value: ${ENVIRONMENT}
+            - name: DD_APP_NAME
+              value: "${DD_APP_NAME}"
+            - name: DD_APP_VERSION
+              value: "${IMAGE_TAG}"
+            - name: DD_SERVICE
+              value: "${DD_SERVICE}"
+            - name: DD_TAGS
+              value: "${DD_TAGS}"
+            - name: NODE_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.hostIP
+            - name: CRYPT_KEEPER_AES_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: bluerobot-crypt-keeper
+                  key: aes-secret-${ENVIRONMENT}
+          envFrom:
+            - configMapRef:
+                name: container-config
+            - configMapRef:
+                name: container-config-${ENVIRONMENT}
+            - configMapRef:
+                name: node-config
+            - secretRef:
+                name: datadog-secrets
+            - configMapRef:
+                name: datadog-config
+            - secretRef:
+                name: mysql-secrets-${ENVIRONMENT}
+            - configMapRef:
+                name: mysql-config-${ENVIRONMENT}
+            - secretRef:
+                name: amqp-secrets-${ENVIRONMENT}
+            - configMapRef:
+                name: amqp-config-${ENVIRONMENT}
+            - configMapRef:
+                name: sendgrid-${ENVIRONMENT}
+            - secretRef:
+                name: sendgrid-${ENVIRONMENT}
+            - secretRef:
+                name: twitter-${ENVIRONMENT}
+            - configMapRef:
+                name: svc-${SERVICE}-config-${ENVIRONMENT}
+          resources:
+            requests:
+              memory: "${CONTAINER_RESOURCE_MEMORY_REQUEST}"
+              cpu: "${CONTAINER_RESOURCE_CPU_REQUEST}"
+            limits:
+              memory: "${CONTAINER_RESOURCE_MEMORY_LIMIT}"
+              cpu: "${CONTAINER_RESOURCE_CPU_LIMIT}"
+          volumeMounts:
+            - name: debugger-credentials
+              mountPath: /secrets
+        # [START sql_proxy_container - This container will make 127.0.0.1:3306 available to the above service container.]
+        - name: cloudsql-proxy
+          image: gcr.io/cloudsql-docker/gce-proxy:${CLOUDSQL_PROXY_VERSION}
+          ports:
+            - name: "http"
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /
+              port: "http"
+              httpHeaders:
+                - name: X-Custom-Header
+                  value: "k8s health check"
+            initialDelaySeconds: 30
+          command:
+            [
+              "/cloud_sql_proxy",
+              "--dir=/cloudsql",
+              "--verbose=false",
+              "-instances=arctic-eye-468:europe-west1:$(MYSQL_INSTANCE_NAME)=tcp:3306",
+              "-credential_file=/secrets/cloudsql/credentials.json",
+            ]
+          env:
+            - name: MYSQL_INSTANCE_NAME
+              valueFrom:
+                configMapKeyRef:
+                  name: mysql-config-${ENVIRONMENT}
+                  key: MYSQL_INSTANCE_NAME
+          resources:
+            requests:
+              memory: "32Mi"
+              cpu: "50m"
+            limits:
+              memory: "64Mi"
+              cpu: "100m"
+          volumeMounts:
+            - name: cloudsql-oauth-credentials
+              mountPath: /secrets/cloudsql
+              readOnly: true
+            - name: ssl-certs
+              mountPath: /etc/ssl/certs
+        # [END sql_proxy_container]
+      # [START volumes for proxy secrets and gke ssl certs]
+      volumes:
+        - name: cloudsql-oauth-credentials
+          secret:
+            secretName: cloudsql-oauth-credentials
+        - name: ssl-certs
+          hostPath:
+            path: /etc/ssl/certs
+        - name: debugger-credentials
+          secret:
+            secretName: debugger-credentials
+      # [END volumes]
